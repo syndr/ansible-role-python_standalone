@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - main
+      - devel
     paths:
       - '.github/workflows/role-python_standalone.yml'
       - './**'
@@ -18,7 +19,7 @@ on:
     - cron: '13 13 * * 0'
 
 jobs:
-  manage-docker_engine:
+  build-docker_engine:
     name: "Role: docker_engine"
     strategy:
       max-parallel: 4
@@ -35,4 +36,26 @@ jobs:
       python-version: ${{ matrix.python-version }}
       python-dependencies: "boto3[crt]"
     secrets: inherit
+
+  deploy-docker_engine:
+    runs-on: ubuntu-latest
+    needs: build-docker_engine
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create and Push Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG_NAME=${{ github.ref_name }}
+          echo "Creating tag $TAG_NAME"
+          # Configure Git user
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Create the tag
+          git tag "$TAG_NAME"
+          # Push the tag to the repository
+          git push origin "refs/tags/$TAG_NAME" --force
 

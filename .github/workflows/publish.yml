@@ -1,0 +1,29 @@
+---
+
+name: Deploy Role
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.release.prerelase == false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag latest release
+        uses: EndBug/latest-tag@latest
+        with:
+          ref: latest
+          description: This tag is automatically generated on new releases.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Deploy Role
+        uses: averagebit/action-galaxy@1.0.0
+        with:
+          galaxy_token: '${{ secrets.GALAXY_API_KEY }}'
+
