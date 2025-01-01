@@ -1,0 +1,32 @@
+---
+galaxy_info:
+  role_name: python_standalone
+  namespace: syndr
+  author: syndr
+  description: Standalone Python environment for Ansible
+  license: MIT
+  min_ansible_version: 1.16
+  platforms:
+    - name: Amazon Linux
+      version:
+        - 2
+        - 2023
+    - name: Flatcar
+      versions:
+        - stable
+    - name: Rocky
+      versions:
+        - 9
+    - name: Fedora
+      versions:
+        - 41
+    #- name: Fedora CoreOS
+    #  versions:
+    #    - stable
+  galaxy_tags:
+    - python
+    - pypy
+    - interpreter
+    - ansible
+dependencies: []
+

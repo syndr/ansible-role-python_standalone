@@ -1,0 +1,108 @@
+---
+role_name_check: 0
+dependency:
+  name: galaxy
+driver:
+  name: default
+  options:
+    managed: true
+platforms:
+  - name: role-python_standalone-al2
+    type: ec2
+    image: ami-06744fbd0847bf4f5
+    region: us-east-2
+    instance_type: t3.micro
+    ssh_user: molecule_runner
+    vpc_id: vpc-0eb9fd1391f4207ec
+    vpc_subnet_id: subnet-0aa189c0d6fc53923
+    boot_wait_seconds: 10
+    hostvars: {}
+  - name: role-python_standalone-flatcar
+    type: ec2
+    image: ami-04d1fbd7638885e4f    # Flatcar-stable-4081.2.1-hvm
+    region: us-east-2
+    instance_type: t3.micro
+    ssh_user: core
+    vpc_id: vpc-0eb9fd1391f4207ec
+    vpc_subnet_id: subnet-0aa189c0d6fc53923
+    boot_wait_seconds: 10
+    hostvars:
+      python_standalone_bin_path: /opt/bin/python3
+
+  # TODO: Support Fedora CoreOS
+  #  - needed: system dependencies (openssh, curl, tar, bzip2)
+  #
+  #- name: role-python_standalone-coreos
+  #  type: ec2
+  #  image: ami-07e374bfb84baad7e     # Fedora CoreOS 41.20241122.3.0
+  #  region: us-east-2
+  #  instance_type: t3.micro
+  #  ssh_user: molecule_runner
+  #  vpc_id: vpc-0eb9fd1391f4207ec
+  #  vpc_subnet_id: subnet-0aa189c0d6fc53923
+  #  boot_wait_seconds: 10
+  #  hostvars:
+  #    python_standalone_bin_path: /opt/bin/python3
+provisioner:
+  name: ansible
+  log: True
+  playbooks:
+    create: ../resources/create.yml
+    prepare: ../resources/prepare.yml
+    converge: ../resources/converge.yml
+    side_effect: ../resources/side_effect.yml
+    verify: ../resources/verify.yml
+    cleanup: ../resources/cleanup.yml
+    destroy: ../resources/destroy.yml
+  config_options:
+    defaults:
+      gathering: explicit
+      playbook_vars_root: top
+      verbosity: ${ANSIBLE_VERBOSITY:-0}
+  env:
+    ARA_API_CLIENT: ${ARA_API_CLIENT:-'http'}
+    ARA_API_SERVER: ${ARA_API_SERVER:-'http://localhost:8000'}
+    ARA_DEFAULT_LABELS: ${ARA_DEFAULT_LABELS:-'testing,molecule'}
+    # To use Ara with molecule:
+    #  export the ANSIBLE_CALLBACK_PLUGINS env var with the output of 'python3 -m ara.setup.callback_plugins'
+    ANSIBLE_CALLBACK_PLUGINS: ${ANSIBLE_CALLBACK_PLUGINS}
+scenario:
+  create_sequence:
+    - dependency
+    - create
+    - prepare
+  check_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - create
+    - prepare
+    - converge
+    - check
+    - destroy
+  converge_sequence:
+    - dependency
+    - create
+    - prepare
+    - converge
+  destroy_sequence:
+    - dependency
+    - cleanup
+    - destroy
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
+verifier:
+  name: ansible
+  enabled: true
+

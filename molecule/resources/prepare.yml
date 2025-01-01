@@ -1,0 +1,25 @@
+---
+
+- name: Prepare controller for execution
+  hosts: localhost
+  tags: always
+  tasks:
+    - name: Configure for standalone role testing
+      ansible.builtin.include_role:
+        name: syndr.molecule.prepare_controller
+      vars:
+        prepare_controller_project_type: role
+
+- name: Prepare target host for execution
+  hosts: molecule
+  tags: always
+  tasks:
+    - name: Check uname
+      ansible.builtin.raw: uname -a
+      register: result
+      changed_when: false
+
+    - name: Run compatability tasks (CoreOS)
+      when: result.stdout is search('coreos')
+      ansible.builtin.include_tasks: compat_coreos.yml
+

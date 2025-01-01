@@ -1,0 +1,38 @@
+---
+
+name: Role - python_standalone
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/role-python_standalone.yml'
+      - './**'
+      - '!*.md'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/role-python_standalone.yml'
+      - './**'
+      - '!*.md'
+  schedule:
+    - cron: '13 13 * * 0'
+
+jobs:
+  manage-docker_engine:
+    name: "Role: docker_engine"
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+        molecule-scenario:
+          - role-python_standalone-docker
+          - role-python_standalone-ec2
+
+    uses: ./.github/workflows/_run-molecule-test.yml
+    with:
+      scenario: ${{ matrix.molecule-scenario }}
+      python-version: ${{ matrix.python-version }}
+      python-dependencies: "boto3[crt]"
+    secrets: inherit
+

@@ -1,0 +1,18 @@
+---
+# Initialize a Molecule scenario for use within a role
+
+- name: Provision file structure
+  hosts: localhost
+  tasks:
+    - name: Launch provisioner
+      ansible.builtin.include_role:
+        name: syndr.molecule.init
+      vars:
+        # Supported platform types are: docker, ec2, potato
+        init_platform_type: ec2
+        # Supported collection sources are: git, galaxy
+        init_collection_source: git
+        # Version of this collection that should be used by the Molecule test
+        # - Set to "" to attempt to use the running version
+        init_collection_version: latest
+

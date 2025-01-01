@@ -1,0 +1,184 @@
+---
+# tasks file for python_standalone
+#
+# NOTE: This role is designed to bootstrap Python on a system where it is not already installed
+#        as such, tasks running on the target host must not depend upon Python being available!
+
+- name: Check current environment for whether update is needed
+  block:
+    - name: Check for pypy executable
+      ansible.builtin.raw: "ls {{ python_standalone_pkg_home }}/pypy/bin/python"
+      register: python_standalone_pypy_python_stat
+      changed_when: false
+      failed_when: false
+
+    - name: Prerequisites are installed
+      ansible.builtin.script:
+        cmd: dependencies.sh
+      register: __python_standalone_dependencies_output
+      changed_when: __python_standalone_dependencies_output.stdout is search('successfully installed')
+
+    - name: Pypy executable exists - is it the right one?
+      block:
+        - name: Get python version
+          ansible.builtin.raw: "{{ python_standalone_pkg_home }}/pypy/bin/python -V | awk '/PyPy/ {print $2}'"
+          register: python_standalone_pypy_current_version
+          changed_when: false
+
+        - name: Pypy version matches - is it configured correctly?
+          block:
+            - name: Pypy is already installed
+              ansible.builtin.set_fact:
+                python_standalone_pypy_isinstalled: true
+
+            - name: Query installed packages
+              ansible.builtin.raw: "{{ python_standalone_pkg_home }}/pypy/bin/pip list --format json"
+              register: python_standalone_pypy_pip_packages_raw
+              changed_when: false
+
+            - name: Format installed packages output
+              ansible.builtin.set_fact:
+                # Assumes that json output will always be the first thing output and all on one line
+                python_standalone_pypy_pip_packages: "{{ python_standalone_pypy_pip_packages_raw.stdout_lines[0] | from_json }}"
+
+            - name: 🐜 Display installed packages
+              ansible.builtin.debug:
+                var: python_standalone_pypy_pip_packages
+                verbosity: 1
+
+            - name: Print module definition info
+              loop: "{{ python_standalone_pypy_modules }}"
+              loop_control:
+                loop_var: __python_standalone_item
+              vars:
+                __python_standalone_pypy_module:
+                  name: "{{ __python_standalone_item | regex_search('^[^<>=!]+') }}"
+                  comparitor: "{{ __python_standalone_item | regex_search('[<>=!]{1,2}') | default('') }}"
+                  version: "{{ __python_standalone_item | regex_search('(\\d+(\\.\\d+)*)$') | default('') }}"
+              ansible.builtin.debug:
+                msg: >
+                  Module: {{ __python_standalone_pypy_module.name }}
+                  Version: {{ __python_standalone_pypy_module.version }}
+                  Comparitor: {{ __python_standalone_pypy_module.comparitor }}
+                verbosity: 1
+
+            - name: Pip package is not installed
+              loop: "{{ python_standalone_pypy_modules }}"
+              loop_control:
+                loop_var: __python_standalone_item
+              vars:
+                __python_standalone_pypy_module:
+                  name: "{{ __python_standalone_item | regex_search('^[^<>=!]+') }}"
+                  comparitor: "{{ __python_standalone_item | regex_search('[<>=!]{1,2}') | default('') }}"
+                  version: "{{ __python_standalone_item | regex_search('(\\d+(\\.\\d+)*)$') | default('') }}"
+              when: >-
+                __python_standalone_pypy_module.name not in (python_standalone_pypy_pip_packages | map(attribute='name') | list)
+                or not (
+                  (python_standalone_pypy_pip_packages | selectattr('name', 'equalto', __python_standalone_pypy_module.name) | first).version
+                    is version_compare(__python_standalone_pypy_module.version, __python_standalone_pypy_module.comparitor, version_type='pep440')
+                  if __python_standalone_pypy_module.version != ''
+                  else true)
+              ansible.builtin.set_fact:
+                python_standalone_pypy_install_packages: true
+          # NOTE: This regex will need to be changed if the pypy version format changes from equivalent to "3.9.v7.3.9"
+          when: "python_standalone_pypy_current_version.stdout | trim == python_standalone_pypy_version | regex_replace('^.*v', '')"
+
+        - name: Is the virtualenv install 👍?
+          block:
+            - name: Check for venv config file
+              ansible.builtin.raw: "ls {{ python_standalone_pkg_home }}/pypy/pyvenv.cfg"
+              register: python_standalone_pypy_venv_stat
+              changed_when: false
+              ignore_errors: true
+
+            - name: Ok it exists... what is it?
+              block:
+                - name: Get current virtualenv version
+                  ansible.builtin.raw: "grep 'virtualenv' {{ python_standalone_pkg_home }}/pypy/pyvenv.cfg | cut -d'=' -f2 | awk '{$1=$1};1'"
+                  register: python_standalone_pypy_venv_current_version
+                  changed_when: false
+
+                - name: 🐜 Show version comparison data
+                  ansible.builtin.debug:
+                    msg: "{{ python_standalone_pypy_venv_current_version.stdout | trim }} == {{ python_standalone_venv_version | string }}"
+                    verbosity: 1
+
+                - name: Virtualenv version is correct
+                  ansible.builtin.set_fact:
+                    python_standalone_venv_isinstalled: true
+                  when: python_standalone_pypy_venv_current_version.stdout | trim == python_standalone_venv_version | string
+              when: python_standalone_pypy_venv_stat.rc == 0
+      when: python_standalone_pypy_python_stat.rc == 0
+  when: not python_standalone_pypy_force_install
+
+- name: Install pypy (full configuration)
+  when: >-
+    not python_standalone_pypy_isinstalled or
+    not python_standalone_venv_isinstalled or
+    python_standalone_pypy_force_install
+  block:
+    - name: Install PyPy-based Python
+      become: true
+      ansible.builtin.script:
+        cmd: bootstrap.sh
+      environment: "{{ bootstrap_environment }}"
+
+    # NOTE: This is only relevant if installed somwhere not owned by root  (IE: in a user dir)
+    - name: Get owner of install location
+      ansible.builtin.raw: "stat -c '%U' {{ python_standalone_pkg_home }}"
+      register: python_standalone_pypy_install_location_owner
+      changed_when: false
+
+    - name: Get group of install location
+      ansible.builtin.raw: "stat -c '%G' {{ python_standalone_pkg_home }}"
+      register: python_standalone_pypy_install_location_group
+      changed_when: false
+
+    - name: Set installed file ownership (runtime)
+      become: true
+      ansible.builtin.raw: >-
+        chown {{ python_standalone_pypy_install_location_owner.stdout | trim }}:{{ python_standalone_pypy_install_location_group.stdout | trim }}
+        -R {{ python_standalone_pkg_home }}/pypy
+
+    - name: Set installed file ownership (base)
+      become: true
+      ansible.builtin.raw: >-
+        chown {{ python_standalone_pypy_install_location_owner.stdout | trim }}:{{ python_standalone_pypy_install_location_group.stdout | trim }}
+        -R {{ python_standalone_pkg_home }}/.pypy
+
+- name: Create launcher for Python binary
+  when: python_standalone_bin_path != ""
+  block:
+    # NOTE: This is a very basic check and will not update the file if it exists, regardless of contents
+    - name: Check for existing launcher
+      ansible.builtin.raw: "ls {{ python_standalone_bin_path }}"
+      register: python_standalone_bin_stat
+      changed_when: false
+      failed_when: false
+
+    - name: Launcher needs to be created
+      become: true
+      block:
+        - name: Make sure target directory exists
+          ansible.builtin.raw: mkdir -p {{ python_standalone_bin_path | dirname }}
+
+        - name: Create shell script launcher for Python binary
+          ansible.builtin.raw: |
+            cat <<'EOF' >{{ python_standalone_bin_path }}
+            #!/bin/sh
+            {{ python_standalone_pkg_home }}/pypy/bin/python $@
+            EOF
+
+        - name: Set launcher permissions
+          ansible.builtin.raw: chmod 755 {{ python_standalone_bin_path }}
+      when: python_standalone_bin_stat.rc != 0
+
+- name: Manage installed python modules
+  when: python_standalone_pypy_install_packages
+  become: true
+  ansible.builtin.raw: "{{ python_standalone_pkg_home }}/pypy/bin/pip install {{ python_standalone_pypy_modules | map('quote') | join(' ') }}"
+
+- name: Output executable location
+  ansible.builtin.debug:
+    msg: "Python can now be executed from this location: {{ python_standalone_pkg_home }}/pypy/bin/python"
+

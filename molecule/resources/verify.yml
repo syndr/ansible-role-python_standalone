@@ -1,0 +1,58 @@
+---
+# Verify that the role being tested has done what it's supposed to
+
+# NOTE: Update this block if version changes beyond 3.10, or more version accuracy is desired
+
+- name: Verify
+  hosts: molecule
+  vars:
+    __ci_role_defaults: "{{ lookup('file', playbook_dir + '/../../defaults/main.yml') | from_yaml }}"
+  tasks:
+    - name: Run python version command
+      vars:
+        __ci_python_path: "{{ python_standalone_bin_path | default(__ci_role_defaults.python_standalone_bin_path) }}"
+      ansible.builtin.raw: "{{ __ci_python_path }} --version"
+      register: __ci_python_version_output
+      changed_when: false
+
+    - name: Python appears healthy
+      ansible.builtin.assert:
+        that:
+          - __ci_python_version_output.rc == 0
+          - "'Python 3.10' in __ci_python_version_output.stdout"
+
+    - name: Query installed packages
+      ansible.builtin.raw: "{{ __ci_role_defaults.python_standalone_pkg_home }}/pypy/bin/pip list --format json"
+      register: __ci_python_standalone_pypy_pip_packages_raw
+      changed_when: false
+
+    - name: Format installed packages output
+      ansible.builtin.set_fact:
+        # Assumes that json output will always be the first thing output and all on one line
+        python_standalone_pypy_pip_packages: "{{ __ci_python_standalone_pypy_pip_packages_raw.stdout_lines[0] | from_json }}"
+
+    - name: 🐜 Display installed packages
+      ansible.builtin.debug:
+        var: python_standalone_pypy_pip_packages
+        verbosity: 1
+
+    - name: Pip package is installed
+      loop: "{{ __ci_role_defaults.python_standalone_pypy_modules }}"
+      loop_control:
+        loop_var: __python_standalone_item
+      vars:
+        __python_standalone_pypy_module:
+          name: "{{ __python_standalone_item | regex_search('^[^<>=!]+') }}"
+          comparitor: "{{ __python_standalone_item | regex_search('[<>=!]{1,2}') | default('') }}"
+          version: "{{ __python_standalone_item | regex_search('(\\d+(\\.\\d+)*)$') | default('') }}"
+      ansible.builtin.assert:
+        that:
+          - __python_standalone_pypy_module.name in (python_standalone_pypy_pip_packages | map(attribute='name') | list)
+          - (
+            (python_standalone_pypy_pip_packages | selectattr('name', 'equalto', __python_standalone_pypy_module.name) | first).version
+              is version_compare(__python_standalone_pypy_module.version, __python_standalone_pypy_module.comparitor, version_type='pep440')
+            if __python_standalone_pypy_module.version != ''
+            else true)
+        fail_msg: Module {{ __python_standalone_pypy_module.name }}{{ __python_standalone_pypy_module.comparitor }}{{ __python_standalone_pypy_module.version }} is not installed!
+        success_msg: Module {{ __python_standalone_pypy_module.name }}{{ __python_standalone_pypy_module.comparitor }}{{ __python_standalone_pypy_module.version }} is installed.
+

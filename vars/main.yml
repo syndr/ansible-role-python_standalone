@@ -1,0 +1,28 @@
+---
+# Used by the provisioning bash script
+bootstrap_environment:
+  LANG: C
+  LC_CTYPE: C
+  LC_ALL: C
+  LC_MESSAGES: C
+  PKG_HOME: "{{python_standalone_pkg_home}}"
+  PYPY_VERSION: "{{python_standalone_pypy_version}}"
+  PYPY_FLAVOR: "{{python_standalone_pypy_flavor}}"
+  PYPY_DOWNLOAD_URL: "{{python_standalone_pypy_url}}"
+  PYPY_SHA256: "{{python_standalone_pypy_sha256}}"
+  PYPY_MODULES_LIST: "{{python_standalone_pypy_modules | join(' ') }}"
+  VENV_DOWNLOAD_URL: "{{python_standalone_venv_url}}"
+  VENV_SHA256: "{{python_standalone_venv_sha256}}"
+  SYSTEM_SSL_CERTS: "{{python_standalone_ssl_certs}}"
+
+
+## These ↓ are modified by internal logic -- do not touch
+# Assume that we need to install pypy until otherwise
+python_standalone_pypy_isinstalled: false
+
+# Assume that we need to update the virtualenv until otherwise
+python_standalone_venv_isinstalled: false
+
+# Assume that no additional pip packages need to be installed (logic will check this)
+python_standalone_pypy_install_packages: false
+

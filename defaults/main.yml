@@ -1,0 +1,37 @@
+---
+# defaults file for python_standalone
+python_standalone_ssl_certs: "/etc/ssl/certs"
+python_standalone_pkg_home: "/opt/python"
+
+# Location to place a launcher for the Python binary (IE: /usr/local/bin/python3.10)
+#  - set to "" to disable
+#  WARNING: This uses a shell script launcher to execute the Python binary within the virtualenv
+python_standalone_bin_path: /usr/local/bin/python3.10
+
+# Force (re)installation even if PyPy is detected as already installed
+python_standalone_pypy_force_install: false
+
+# The pypy version from https://www.pypy.org/download.html
+python_standalone_pypy_version: "3.10-v7.3.17"
+# The checksum of the downloaded archive; published at https://www.pypy.org/checksums.html
+python_standalone_pypy_sha256: "fdcdb9b24f1a7726003586503fdeb264fd68fc37fbfcea022dcfe825a7fee18b"
+
+# Download base URL and system type -- should not need to be changed
+python_standalone_pypy_url: "https://downloads.python.org/pypy"
+python_standalone_pypy_flavor: "linux64"
+
+# List of Python modules that should be installed
+# Note that this only supports adding, and not removing packages at this time!
+python_standalone_pypy_modules:
+  - docker-py
+  - requests>2.32.0   # Requests 2.32.2+ requires community.docker 3.10.2+ -- see https://github.com/ansible-collections/community.docker/issues/860
+
+
+# The virtualenv version from here: https://github.com/pypa/get-virtualenv/releases
+python_standalone_venv_version: "20.28.0"
+# The sha256sum of the downloaded .pyz file
+python_standalone_venv_sha256: "479a2d9187b93fe6574ca5aa25df723749811d12ece46d500ae52dc04bc02e17"
+
+# The URL from which to download virtualenv -- should not need to be changed
+python_standalone_venv_url: "https://github.com/pypa/get-virtualenv/blob/{{ python_standalone_venv_version }}/public/virtualenv.pyz?raw=true"
+

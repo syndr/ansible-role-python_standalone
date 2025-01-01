@@ -1,0 +1,91 @@
+---
+# Do preperatory motions to allow us to function on CoreOS 16xx systems
+
+- name: Remove expired certificates
+  block:
+    - name: Find expired certificates in /etc/ssl/certs
+      ansible.builtin.raw: >-
+        find -L /etc/ssl/certs/ -type f -name "*.pem" -print0 | xargs -0 -I {}
+        sh -c ' echo $([[ "$(date -d "$(openssl x509 -in "{}" -noout -enddate | cut -d= -f2)" +%s)" -lt "$(date +%s)" ]]
+        && echo "{}" )' | grep ssl
+      register: __ac_compat_expired_certs
+      changed_when: false
+      failed_when: false
+
+    - name: Show expired certificates
+      ansible.builtin.debug:
+        var: __ac_compat_expired_certs.stdout_lines
+        verbosity: 1
+
+    - name: There are expired certificates to remove
+      when:
+        - __ac_compat_expired_certs.stdout_lines | length > 0
+        - >-
+          ((not __ac_compat_expired_certs.stdout_lines[0] is search('file system loop') | bool)
+          if (__ac_compat_expired_certs.stdout_lines | length == 1) else true)
+      become: true
+      block:
+        - name: Back up /etc/ssl/certs directory
+          ansible.builtin.raw: cp -r /etc/ssl/certs/ /etc/ssl/certs.bak
+          register: __ac_compat_cert_backup_output
+
+        - name: Display backup output
+          ansible.builtin.debug:
+            var: __ac_compat_cert_backup_output
+            verbosity: 1
+
+        - name: Remove expired certificate from /etc/ssl/certs
+          when: __ac_item is not search('file system loop')
+          ansible.builtin.raw: rm -f "{{ __ac_item }}"
+          register: __ac_compat_cert_removal_output
+          loop: "{{ __ac_compat_expired_certs.stdout_lines }}"
+          loop_control:
+            loop_var: __ac_item
+
+        - name: Show output of certificate removal
+          ansible.builtin.debug:
+            var: __ac_compat_cert_removal_output
+            verbosity: 1
+
+        - name: Rebuild certificate cache
+          ansible.builtin.raw: update-ca-certificates
+
+- name: Configure Toolbox
+  block:
+    - name: Check for pinned Toolbox version
+      become: true
+      ansible.builtin.raw: |
+        # List of files to check
+        files=("/home/core/.toolboxrc" "/root/.toolboxrc")
+        all_true=true
+        for file in "${files[@]}"; do
+          if ! grep -Eq "TOOLBOX_DOCKER_TAG=[0-9].*" "$file"; then
+            all_true=false
+            break
+          fi
+        done
+        if [[ $all_true == true ]]; then
+          echo true
+        else
+          echo false
+        fi
+      register: __ac_compat_toolbox_istagged
+      changed_when: false
+
+    - name: Show whether tagged
+      ansible.builtin.debug:
+        var: __ac_compat_toolbox_istagged.stdout | trim | bool
+        verbosity: 1
+
+    - name: Pin Toolbox version (CoreOS 16xx)
+      when: not (__ac_compat_toolbox_istagged.stdout | trim | bool)
+      # Search the toolbox script for any numeric assignment to TOOLBOX_DOCKER_TAG.
+      # If there's an explicit version assignment, don't do anything.
+      # If no numeric assignment, it's probably `latest` which we don't want now.
+      # Assign 33 which is the last version that works legacy 16xx CoreOS.
+      # Do it for both root and coreos users for best user experience.
+      become: true
+      ansible.builtin.raw: |
+        echo "TOOLBOX_DOCKER_TAG=32" > /root/.toolboxrc
+        echo "TOOLBOX_DOCKER_TAG=32" > /home/core/.toolboxrc
+

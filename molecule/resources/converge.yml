@@ -1,0 +1,25 @@
+---
+# Verify that the target code runs successfullly.
+# Note that this playbook (converge.yml) must be idempotent!
+
+# Check that the molecule inventory is correctly configured
+- name: Fail if molecule group is missing
+  hosts: localhost
+  tasks:
+    - name: Print host inventory groups
+      ansible.builtin.debug:
+        msg: "{{ groups }}"
+
+    - name: Assert group existence
+      ansible.builtin.assert:
+        that: "'molecule' in groups"
+        fail_msg: |
+          molecule group was not found inside inventory groups: {{ groups }}
+
+- name: Converge
+  hosts: molecule
+  tasks:
+    - name: Install Python standalone
+      ansible.builtin.include_role:
+        name: python_standalone
+
