@@ -1,5 +1,7 @@
 # python_standalone
 
+[![Role - python_standalone](https://github.com/syndr/ansible-role-python_standalone/actions/workflows/role-python_standalone.yml/badge.svg)](https://github.com/syndr/ansible-role-python_standalone/actions/workflows/role-python_standalone.yml)
+
 _Role based upon [vmware/ansible-coreos-bootstrap](https://github.com/vmware/ansible-coreos-bootstrap) with updates for current pypy builds._
 
 In order to effectively run ansible, the target machine needs to have a python interpreter. Some machines are minimal and do not ship with any version of python. Some machines are old, and don't have a modern version of Python packaged for them. To get around these limitations we can install [pypy](http://pypy.org/), a lightweight python interpreter. The `python_standalone` role will install pypy, which can then be configured for use by Ansible via inventory host variables or autodiscovery.
